@@ -41,7 +41,7 @@ ENV/
 *.key
 *.pem
 *.secret
-
+CLAUDE.md
 
 # 测试覆盖率
 .coverage

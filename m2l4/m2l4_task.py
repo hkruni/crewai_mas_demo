@@ -5,31 +5,27 @@ Task 定义与结构化输出示例
 演示如何使用 Pydantic 模型定义 Task 的结构化输出，实现"契约驱动"的任务设计：
 1. 使用 Pydantic BaseModel 定义数据结构（契约）
 2. Task 的 output_pydantic 参数指定输出格式
-3. Task 的 context 参数实现任务依赖关系
-4. 通过 TaskOutput 设置上游任务的输出（Mock 数据）
+3. Mock 数据 + kickoff(inputs=...) 传入任务输入
 
 本示例展示了：
 - 数据模型定义：如何用 Pydantic 定义结构化输出
-- Task 依赖：如何通过 context 参数传递上游任务的输出
-- Mock 数据：如何在开发阶段模拟上游任务的输出
+- Mock 数据：如何在开发阶段模拟上游任务的输出，通过 inputs 传入
 - 结构化输出：如何确保 Agent 的输出符合预定义的数据结构
 
 学习要点：
 - 契约驱动：通过 Pydantic 模型定义任务输出的"契约"
-- 任务依赖：context 参数如何实现任务之间的数据传递
 - 结构化输出：如何确保 Agent 的输出格式符合预期
 """
 
-import sys
 import os
-import json
+import sys
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-from crewai import Agent, Task, Crew, Process, TaskOutput
+from crewai import Agent, Task, Crew, Process
 from llm.aliyun_llm import AliyunLLM
 from pydantic import BaseModel, Field
 from tools.intermediate_tool import IntermediateTool
@@ -112,10 +108,8 @@ content_strategist = Agent(
 # ==============================================================================
 # Mock 上游任务输出（开发阶段使用）
 # ==============================================================================
-# 在实际开发中，上游任务可能还未实现，可以使用 Mock 数据来测试下游任务
-# 通过 TaskOutput 设置上游任务的输出，模拟真实的任务执行结果
+# 上游任务可能未实现时，用 Mock 数据模拟视觉分析报告，通过 kickoff(inputs=...) 传入
 
-# 创建模拟的视觉分析报告
 visual_report = VisualAnalysisReport(
     user_raw_intent="想卖这个墨绿色马克杯，主打独居女生市场，强调氛围感和情绪价值",
     analyzed_images=[
@@ -147,54 +141,12 @@ visual_report = VisualAnalysisReport(
     overall_visual_summary="整体素材偏向低饱和度的复古风格，色调温暖柔和，适合营造'独处时光'和'精神避难所'的情绪氛围。图片质量较高，构图简洁，但缺乏产品细节展示和场景多样性。"
 )
 
-# 创建上游任务并设置 mock 输出
-# 注意：这个 Agent 只是用于 mock，不会真正执行，所以需要指定 LLM 避免使用默认配置
-visual_agent = Agent(
-    role="视觉分析专家",
-    goal="分析图片",
-    backstory="视觉分析师",
-    llm=AliyunLLM(
-        model="qwen-plus",
-        api_key=os.getenv("QWEN_API_KEY"),
-        region="cn",
-    ),
-)
-
-upstream_task = Task(
-    description="分析用户提供的图片，生成视觉分析报告",
-    expected_output="一个完整的 VisualAnalysisReport 结构化输出",
-    agent=visual_agent,
-    output_pydantic=VisualAnalysisReport,
-)
-
-# 设置 mock 输出（关键：必须在创建下游任务之前设置）
-upstream_task.output = TaskOutput(
-    raw=json.dumps(visual_report.model_dump(), indent=2, ensure_ascii=False),
-    description="视觉分析报告",
-    agent="视觉分析专家",  # 使用字符串，对应 upstream_task.agent.role
-    pydantic=visual_report,
-)
-
-# 验证 mock 输出是否设置成功
-print("=" * 80)
-print("验证 Mock 上游任务输出:")
-print("=" * 80)
-print(f"upstream_task.output is None: {upstream_task.output is None}")
-if upstream_task.output:
-    print(f"upstream_task.output.agent: {upstream_task.output.agent}")
-    print(f"upstream_task.output.raw 长度: {len(upstream_task.output.raw)} 字符")
-    print(f"upstream_task.output.raw 预览: {upstream_task.output.raw[:200]}...")
-    print(f"upstream_task.output.pydantic: {type(upstream_task.output.pydantic).__name__}")
-print()
-
 
 # ==============================================================================
 # Task 定义：内容策划任务
 # ==============================================================================
-# 本 Task 展示了"契约驱动"的任务设计：
-# 1. output_pydantic=ContentStrategyBrief：指定输出必须符合 ContentStrategyBrief 模型
-# 2. context=[upstream_task]：指定任务依赖，可以访问上游任务的输出
-# 3. description 中明确说明需要基于上游任务的输出进行分析
+# output_pydantic=ContentStrategyBrief 指定输出必须符合该模型（契约驱动）
+# description 中的 {visual_report} 由 kickoff(inputs=...) 注入
 
 task_content_strategy = Task(
     description="""
@@ -203,25 +155,25 @@ task_content_strategy = Task(
     2. 基于 CES 算法和反漏斗模型，制定精准的内容策略
     3. 策略要具体可执行，不能泛泛而谈
     4. 使用 IntermediateTool 工具保存中间思考过程
+
+    视觉分析报告如下：
+    {visual_report}
     
     **重要提示**：
-    - 必须基于上游任务的视觉分析报告进行分析（已通过 context 传递）
-    - 上游任务输出包含：user_raw_intent、analyzed_images、overall_visual_summary
+    - 必须基于输入的视觉分析报告进行分析
+    - 报告包含：user_raw_intent、analyzed_images、overall_visual_summary
     - 策略要符合小红书平台的算法特点
     - 所有输出必须使用中文
     """,
     expected_output="一个完整的 ContentStrategyBrief 结构化输出，包含所有必填字段。",
     agent=content_strategist,
     output_pydantic=ContentStrategyBrief,
-    context=[upstream_task],
 )
 
 
 # ==============================================================================
 # 执行任务
 # ==============================================================================
-# Crew.kickoff() 会自动处理 context，从上游任务的 output 中获取数据
-# 这是"契约驱动"的体现：下游任务依赖上游任务的输出格式
 
 crew = Crew(
     agents=[content_strategist],
@@ -230,28 +182,7 @@ crew = Crew(
     verbose=True,
 )
 
-# 在执行前再次验证 context 设置
-print("=" * 80)
-print("验证任务 Context 设置:")
-print("=" * 80)
-print(f"task_content_strategy.context: {task_content_strategy.context}")
-if task_content_strategy.context:
-    for ctx_task in task_content_strategy.context:
-        print(f"  - Context task: {ctx_task.description}")
-        print(f"    Context task.output is None: {ctx_task.output is None}")
-        if ctx_task.output:
-            print(f"    Context task.output.raw 长度: {len(ctx_task.output.raw)} 字符")
-            print(f"    Context task.output.agent: {ctx_task.output.agent}")
-        else:
-            print("    ⚠️ 警告：Context task.output 为 None！")
-            print("    这会导致 Agent 无法接收到上游任务的输出。")
-print()
-
-# 验证通过后执行
-if upstream_task.output is None:
-    raise ValueError("❌ 错误：upstream_task.output 未设置！请确保在创建下游任务之前设置 mock 输出。")
-
-result = crew.kickoff()
+result = crew.kickoff(inputs={"visual_report": visual_report.model_dump_json()})
 print("\n" + "="*80)
 print("执行结果:")
 print("="*80)

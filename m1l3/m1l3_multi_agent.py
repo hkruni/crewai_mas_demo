@@ -1,5 +1,5 @@
 """
-课程：09｜定义Process：任务调度与信息传递 示例代码
+课程：03｜Multi-Agent 系统：Agent、Task、Process 的协作美学 示例代码
 Multi-Agent 协作示例
 
 演示如何使用多个 Agent 协作完成复杂任务，包括：

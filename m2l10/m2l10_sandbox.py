@@ -2,6 +2,9 @@
 课程：15｜王牌超能力：代码解释器与无头浏览器 示例代码
 沙盒 Agent + MCP 工具一体化实战
 
+运行程序前需要先安装docker并启动AIO-Sandbox：
+docker run -d --security-opt seccomp=unconfined --rm -it -p 8022:8080 ghcr.io/agent-infra/sandbox:latest
+
 本示例演示如何在 CrewAI 中：
 1. 定义一个具备「代码执行 + 文件系统 + 无头浏览器」多重能力的万能沙盒 Agent
 2. 通过 MCP HTTP Server 将沙盒中的浏览器、代码执行环境等能力暴露给 Agent 调用
