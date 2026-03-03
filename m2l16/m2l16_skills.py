@@ -30,7 +30,7 @@ for _p in [str(_M2L16_ROOT), str(_PROJECT_ROOT)]:
 
 from llm import AliyunLLM  # noqa: E402
 from tools.skill_loader_tool import SkillLoaderTool, build_skill_crew  # noqa: E402
-from tools.save_intermediate_product_tool import Save_Intermediate_Product_Tool  # noqa: E402
+from tools.intermediate_tool import IntermediateTool  # noqa: E402
 # Demo 用户请求
 USER_REQUEST = (
     "请将./workspace/data/quarterly_report.pdf里的关键数据提炼出来，生成一份格式规范的 Word 文档"
@@ -54,9 +54,9 @@ def build_main_crew() -> Crew:
 
         你通常的工作思路包括：
         1、你会先去理解用户需求，进行需求分析，将结果使用Save_Intermediate_Product_Tool记录；
-        2、当要完成任务有需要参考的skill时，你需要使用skill_loader工具去加载对应skill；
+        2、当要完成任务有需要参考的type是reference的skill时，你需要使用skill_loader工具去加载对应skill；
         3、你会规划步骤，生成子任务，使用Save_Intermediate_Product_Tool记录，每个子任务都要有明确的预期目标和足够的背景信息；
-        3、然后依次完成子任务，当子任务适合执行型skill完成时，你会生成task_context并使用skill_loader工具，调用对应skill去完成；预期目标应该是结构化的json结果，你必须给子任务一个json schema，以便你确认执行情况和结果；
+        3、然后依次完成子任务，当子任务适合type是task的skill完成时，你会生成task_context并使用skill_loader工具，调用对应skill去完成；预期目标应该是结构化的json结果，你必须给子任务一个json schema，以便你确认执行情况和结果；
         4、根据每次的子任务结果，你会去管理当前的步骤，如果出现偏差你可以进行重新规划，同样使用Save_Intermediate_Product_Tool记录；
         5、最终你会将最终结果返回给用户。
 
@@ -64,7 +64,7 @@ def build_main_crew() -> Crew:
         你会尽量使用skill完成任务，而不是自行编造结果。
         """,
         llm=AliyunLLM(model="qwen3-max", region="cn", temperature=0.3),
-        tools=[skill_loader, Save_Intermediate_Product_Tool()],
+        tools=[skill_loader, IntermediateTool()],
         verbose=True,
     )
 
